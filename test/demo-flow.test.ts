@@ -116,6 +116,16 @@ describe('Demo Flow - Account Abstraction', function () {
       const beneficiary = createAddress()  // Địa chỉ nhận gas refund
       const countBefore = await counter.counters(simpleAccount.address)
       
+      // === LOG MINH CHỨNG AI TRẢ GAS ===
+      const accountDepositBefore = await entryPoint.balanceOf(simpleAccount.address)
+      const accountBalanceBefore = await ethers.provider.getBalance(simpleAccount.address)
+      const ethersSignerBalanceBefore = await ethers.provider.getBalance(await ethersSigner.getAddress())
+      
+      console.log('💰 Gas Payment Analysis:')
+      console.log('   - Account deposit before:', ethers.utils.formatEther(accountDepositBefore), 'ETH')
+      console.log('   - Account balance before:', ethers.utils.formatEther(accountBalanceBefore), 'ETH')
+      console.log('   - EthersSigner balance before:', ethers.utils.formatEther(ethersSignerBalanceBefore), 'ETH')
+      
       // Gửi UserOperation đến EntryPoint để xử lý
       const tx = await entryPoint.handleOps([userOp], beneficiary, {
         maxFeePerGas: 1e9,    // Max fee per gas
@@ -125,12 +135,27 @@ describe('Demo Flow - Account Abstraction', function () {
 
       // === KIỂM TRA KẾT QUẢ ===
       const countAfter = await counter.counters(simpleAccount.address)
+      const accountDepositAfter = await entryPoint.balanceOf(simpleAccount.address)
+      const accountBalanceAfter = await ethers.provider.getBalance(simpleAccount.address)
+      const ethersSignerBalanceAfter = await ethers.provider.getBalance(await ethersSigner.getAddress())
+      
       expect(countAfter.toNumber()).to.equal(countBefore.toNumber() + 1)
       
       console.log('✅ Transaction executed successfully')
       console.log('   - Counter before:', countBefore.toNumber())
       console.log('   - Counter after:', countAfter.toNumber())
       console.log('   - Gas used:', receipt.gasUsed.toString())
+      
+      // === LOG KẾT QUẢ GAS PAYMENT ===
+      console.log('💰 Gas Payment Results:')
+      console.log('   - Account deposit after:', ethers.utils.formatEther(accountDepositAfter), 'ETH')
+      console.log('   - Account balance after:', ethers.utils.formatEther(accountBalanceAfter), 'ETH')
+      console.log('   - EthersSigner balance after:', ethers.utils.formatEther(ethersSignerBalanceAfter), 'ETH')
+      console.log('   - Account deposit change:', ethers.utils.formatEther(accountDepositAfter.sub(accountDepositBefore)), 'ETH (positive = received refund)')
+      console.log('   - Account balance change:', ethers.utils.formatEther(accountBalanceAfter.sub(accountBalanceBefore)), 'ETH (negative = paid gas)')
+      console.log('   - EthersSigner paid (balance decrease):', ethers.utils.formatEther(ethersSignerBalanceBefore.sub(ethersSignerBalanceAfter)), 'ETH')
+      console.log('   - Beneficiary received gas refund:', ethers.utils.formatEther(await ethers.provider.getBalance(beneficiary)), 'ETH')
+      console.log('   - Note: Account paid gas from balance, received refund to deposit')
     })
 
     it('should execute batch transactions', async () => {
@@ -160,16 +185,26 @@ describe('Demo Flow - Account Abstraction', function () {
       const beneficiary = createAddress()
       const balance1Before = await ethers.provider.getBalance(target1)
       const balance2Before = await ethers.provider.getBalance(target2)
+      
+      // === LOG MINH CHỨNG AI TRẢ GAS ===
+      const accountDepositBefore = await entryPoint.balanceOf(simpleAccount.address)
+      const ethersSignerBalanceBefore = await ethers.provider.getBalance(await ethersSigner.getAddress())
+      
+      console.log('💰 Gas Payment Analysis (Batch):')
+      console.log('   - Account deposit before:', ethers.utils.formatEther(accountDepositBefore), 'ETH')
+      console.log('   - EthersSigner balance before:', ethers.utils.formatEther(ethersSignerBalanceBefore), 'ETH')
 
       const tx = await entryPoint.handleOps([userOp], beneficiary, {
         maxFeePerGas: 1e9,
         gasLimit: 1e7
       })
-      await tx.wait()
+      const receipt = await tx.wait()
 
       // === KIỂM TRA KẾT QUẢ ===
       const balance1After = await ethers.provider.getBalance(target1)
       const balance2After = await ethers.provider.getBalance(target2)
+      const accountDepositAfter = await entryPoint.balanceOf(simpleAccount.address)
+      const ethersSignerBalanceAfter = await ethers.provider.getBalance(await ethersSigner.getAddress())
 
       expect(balance1After).to.equal(balance1Before.add(parseEther('0.1')))
       expect(balance2After).to.equal(balance2Before.add(parseEther('0.05')))
@@ -177,6 +212,16 @@ describe('Demo Flow - Account Abstraction', function () {
       console.log('✅ Batch transaction executed successfully')
       console.log('   - Target1 received:', parseEther('0.1').toString())
       console.log('   - Target2 received:', parseEther('0.05').toString())
+      console.log('   - Gas used:', receipt.gasUsed.toString())
+      
+      // === LOG KẾT QUẢ GAS PAYMENT ===
+      console.log('💰 Gas Payment Results (Batch):')
+      console.log('   - Account deposit after:', ethers.utils.formatEther(accountDepositAfter), 'ETH')
+      console.log('   - EthersSigner balance after:', ethers.utils.formatEther(ethersSignerBalanceAfter), 'ETH')
+      console.log('   - Account deposit change:', ethers.utils.formatEther(accountDepositAfter.sub(accountDepositBefore)), 'ETH (negative = paid gas)')
+      console.log('   - EthersSigner paid (balance decrease):', ethers.utils.formatEther(ethersSignerBalanceBefore.sub(ethersSignerBalanceAfter)), 'ETH')
+      console.log('   - Beneficiary received gas refund:', ethers.utils.formatEther(await ethers.provider.getBalance(beneficiary)), 'ETH')
+      console.log('   - Note: Account paid gas for UserOperation execution')
     })
   })
 
@@ -246,6 +291,15 @@ describe('Demo Flow - Account Abstraction', function () {
       const beneficiary = createAddress()
       const paymasterDepositBefore = await entryPoint.balanceOf(paymaster.address)
       const countBefore = await counter.counters(account2.address)
+      
+      // === LOG MINH CHỨNG AI TRẢ GAS ===
+      const account2DepositBefore = await entryPoint.balanceOf(account2.address)
+      const ethersSignerBalanceBefore = await ethers.provider.getBalance(await ethersSigner.getAddress())
+      
+      console.log('💰 Gas Payment Analysis (Paymaster):')
+      console.log('   - Account2 deposit before:', ethers.utils.formatEther(account2DepositBefore), 'ETH')
+      console.log('   - Paymaster deposit before:', ethers.utils.formatEther(paymasterDepositBefore), 'ETH')
+      console.log('   - EthersSigner balance before:', ethers.utils.formatEther(ethersSignerBalanceBefore), 'ETH')
 
       const tx = await entryPoint.handleOps([userOp], beneficiary, {
         maxFeePerGas: 1e9,
@@ -256,6 +310,8 @@ describe('Demo Flow - Account Abstraction', function () {
       // === KIỂM TRA KẾT QUẢ ===
       const paymasterDepositAfter = await entryPoint.balanceOf(paymaster.address)
       const countAfter = await counter.counters(account2.address)
+      const account2DepositAfter = await entryPoint.balanceOf(account2.address)
+      const ethersSignerBalanceAfter = await ethers.provider.getBalance(await ethersSigner.getAddress())
 
       expect(countAfter.toNumber()).to.equal(countBefore.toNumber() + 1)
       expect(paymasterDepositAfter).to.be.lt(paymasterDepositBefore) // Paymaster đã trả gas
@@ -263,7 +319,18 @@ describe('Demo Flow - Account Abstraction', function () {
       console.log('✅ Paymaster transaction executed successfully')
       console.log('   - Counter before:', countBefore.toNumber())
       console.log('   - Counter after:', countAfter.toNumber())
-      console.log('   - Paymaster paid:', paymasterDepositBefore.sub(paymasterDepositAfter).toString())
+      console.log('   - Gas used:', receipt.gasUsed.toString())
+      
+      // === LOG KẾT QUẢ GAS PAYMENT ===
+      console.log('💰 Gas Payment Results (Paymaster):')
+      console.log('   - Account2 deposit after:', ethers.utils.formatEther(account2DepositAfter), 'ETH')
+      console.log('   - Paymaster deposit after:', ethers.utils.formatEther(paymasterDepositAfter), 'ETH')
+      console.log('   - EthersSigner balance after:', ethers.utils.formatEther(ethersSignerBalanceAfter), 'ETH')
+      console.log('   - Account2 deposit change:', ethers.utils.formatEther(account2DepositAfter.sub(account2DepositBefore)), 'ETH (no change = gasless)')
+      console.log('   - Paymaster deposit change:', ethers.utils.formatEther(paymasterDepositAfter.sub(paymasterDepositBefore)), 'ETH (negative = paid gas)')
+      console.log('   - EthersSigner paid (balance decrease):', ethers.utils.formatEther(ethersSignerBalanceBefore.sub(ethersSignerBalanceAfter)), 'ETH')
+      console.log('   - Beneficiary received gas refund:', ethers.utils.formatEther(await ethers.provider.getBalance(beneficiary)), 'ETH')
+      console.log('   - Note: Paymaster paid gas, Account2 had gasless transaction')
     })
   })
 
