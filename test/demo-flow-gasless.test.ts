@@ -75,11 +75,6 @@ describe('Demo Flow - Account Abstraction', function () {
     simpleAccountFactory = factory
     console.log('Simple Contract Account created at:', simpleAccount.address)
 
-    // === BƯỚC 4: Fund Contract Account ===
-    // Cần fund account với 1 ETH để có thể trả gas cho các giao dịch
-    await fund(simpleAccount)
-    console.log('Simple Contract Account funded 1 ETH')
-
     // === BƯỚC 5: Deploy Test Counter ===
     // TestCounter là contract đơn giản để demo việc thực hiện giao dịch
     counter = await new TestCounter__factory(ethersSigner).deploy()
@@ -95,10 +90,7 @@ describe('Demo Flow - Account Abstraction', function () {
     // - Sponsor transaction
     // - Gasless transaction
     
-    let paymaster: TestPaymasterAcceptAll  // Paymaster contract
-    let account2Owner: Wallet              // Owner của account thứ 2
-    let account2: SimpleAccount            // Account thứ 2 để test paymaster
-
+    let paymaster: TestPaymasterAcceptAll  // Paymaster contract    
     before(async () => {
       // === DEPLOY PAYMASTER ===
       // TestPaymasterAcceptAll là paymaster test chấp nhận tất cả request
@@ -111,17 +103,6 @@ describe('Demo Flow - Account Abstraction', function () {
       // Paymaster cần deposit để trả gas cho user
       await paymaster.deposit({ value: parseEther('1') }) // Add deposit
       console.log('✅ Paymaster deployed at:', paymaster.address)
-
-      // === TẠO ACCOUNT THỨ 2 ===
-      // Tạo account riêng để test paymaster (không fund ETH)
-      account2Owner = createAccountOwner()
-      const { proxy: account2Proxy } = await createAccount(
-        ethersSigner,
-        account2Owner.address,
-        entryPoint.address
-      )
-      account2 = account2Proxy
-      console.log('✅ Account2 created at:', account2.address)
     })
 
     it('should execute transaction with paymaster sponsorship', async () => {
@@ -130,7 +111,7 @@ describe('Demo Flow - Account Abstraction', function () {
       // === CHUẨN BỊ GIAO DỊCH ===
       // Tạo giao dịch tương tự như test trước
       const countData = await counter.populateTransaction.count()
-      const accountExec = await account2.populateTransaction.execute(
+      const accountExec = await simpleAccount.populateTransaction.execute(
         counter.address,
         0,
         countData.data!
@@ -139,19 +120,19 @@ describe('Demo Flow - Account Abstraction', function () {
       // === TẠO USEROPERATION VỚI PAYMASTER ===
       // Khác biệt chính: thêm paymaster vào UserOperation
       const userOp = await fillSignAndPack({
-        sender: account2.address,
+        sender: simpleAccount.address,
         callData: accountExec.data,
         paymaster: paymaster.address,              // Địa chỉ paymaster
         paymasterVerificationGasLimit: 1e6,       // Gas cho paymaster validation
         paymasterPostOpGasLimit: 1e5,             // Gas cho paymaster postOp
         verificationGasLimit: 1e6,
         callGasLimit: 1e6
-      }, account2Owner, entryPoint)
+      }, accountOwner, entryPoint)
 
       // === THỰC HIỆN GIAO DỊCH VỚI PAYMASTER ===
       const beneficiary = createAddress()
       const paymasterDepositBefore = await entryPoint.balanceOf(paymaster.address)
-      const countBefore = await counter.counters(account2.address)
+      const countBefore = await counter.counters(simpleAccount.address)
       
       // === LOG MINH CHỨNG AI TRẢ GAS ===
       const accountBalance2Before = await ethers.provider.getBalance(simpleAccount.address)
@@ -167,8 +148,8 @@ describe('Demo Flow - Account Abstraction', function () {
 
       // === KIỂM TRA KẾT QUẢ ===
       const paymasterDepositAfter = await entryPoint.balanceOf(paymaster.address)
-      const countAfter = await counter.counters(account2.address)
-      const accountBalance2After = await ethers.provider.getBalance(account2.address)
+      const countAfter = await counter.counters(simpleAccount.address)
+      const accountBalance2After = await ethers.provider.getBalance(simpleAccount.address)
       const ethersSignerBalanceAfter = await ethers.provider.getBalance(await ethersSigner.getAddress())
 
       expect(countAfter.toNumber()).to.equal(countBefore.toNumber() + 1)
