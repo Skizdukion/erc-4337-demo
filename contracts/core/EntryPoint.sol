@@ -19,6 +19,7 @@ import "../utils/Exec.sol";
 import "@openzeppelin/contracts/utils/ReentrancyGuardTransient.sol";
 import "@openzeppelin/contracts/utils/introspection/ERC165.sol";
 import "@openzeppelin/contracts/utils/cryptography/EIP712.sol";
+import "hardhat/console.sol";
 
 /**
  * Account-Abstraction (EIP-4337) singleton EntryPoint v0.8 implementation.
@@ -538,6 +539,7 @@ contract EntryPoint is IEntryPoint, StakeManager, NonceManager, ReentrancyGuardT
         uint256 validationData
     )
     {
+        console.log("_validateAccountPrepayment:", requiredPrefund);
         unchecked {
             MemoryUserOp memory mUserOp = opInfo.mUserOp;
             address sender = mUserOp.sender;
@@ -550,6 +552,7 @@ contract EntryPoint is IEntryPoint, StakeManager, NonceManager, ReentrancyGuardT
                     ? 0
                     : requiredPrefund - bal;
             }
+            console.log("missingAccountFunds:", missingAccountFunds);
             validationData = _callValidateUserOp(opIndex, op, opInfo, missingAccountFunds);
             if (paymaster == address(0)) {
                 if (!_tryDecrementDeposit(sender, requiredPrefund)) {
@@ -824,6 +827,7 @@ contract EntryPoint is IEntryPoint, StakeManager, NonceManager, ReentrancyGuardT
         bytes memory context,
         uint256 actualGas
     ) internal virtual returns (uint256 actualGasCost) {
+        console.log("_postExecution:", actualGas);
         uint256 preGas = gasleft();
         unchecked {
             address refundAddress;

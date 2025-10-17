@@ -1,11 +1,15 @@
 // SPDX-License-Identifier: GPL-3.0
 pragma solidity ^0.8.28;
+import "hardhat/console.sol";
 
 // Sample "receiver" contract, for testing "exec" from account.
 contract TestCounter {
     mapping(address => uint256) public counters;
 
     function count() public {
+        console.log("--------------------------------");
+        console.log("Sender address in counter contract:", msg.sender);
+        console.log("--------------------------------");
         counters[msg.sender] = counters[msg.sender] + 1;
     }
 

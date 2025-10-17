@@ -420,17 +420,217 @@ UserOperation là đối tượng chính trong ERC-4337, chứa:
 - `verificationGasLimit`: Gas cho validation
 - `callGasLimit`: Gas cho execution
 
-### **EntryPoint là gì?**
-EntryPoint là contract trung tâm xử lý tất cả UserOperations:
-1. **Validation**: Kiểm tra signature và quyền hạn
-2. **Execution**: Thực hiện giao dịch
-3. **Payment**: Xử lý thanh toán gas
+### **🏛️ EntryPoint là gì?**
+
+**EntryPoint** là contract trung tâm và quan trọng nhất trong ERC-4337 Account Abstraction. Nó đóng vai trò như "cổng vào" duy nhất để xử lý tất cả UserOperations.
+
+#### **🎯 Vai trò chính của EntryPoint:**
+
+**1. Validation (Xác thực)**
+```typescript
+// EntryPoint kiểm tra:
+- Signature của UserOperation có hợp lệ không
+- Smart Account có quyền thực hiện giao dịch không
+- Paymaster có sẵn sàng trả gas không (nếu có)
+- Gas limits có đủ không
+```
+
+**2. Execution (Thực thi)**
+```typescript
+// EntryPoint thực hiện:
+- Gọi Smart Account để thực hiện logic nghiệp vụ
+- Xử lý batch transactions nếu có
+- Đảm bảo atomic execution (tất cả thành công hoặc tất cả fail)
+```
+
+**3. Payment (Thanh toán)**
+```typescript
+// EntryPoint xử lý thanh toán gas:
+- Thu gas từ Smart Account deposit/balance
+- Hoặc thu gas từ Paymaster deposit
+- Hoàn lại gas thừa cho beneficiary
+- Quản lý deposit của các accounts
+```
+
+#### **📊 Flow hoạt động của EntryPoint:**
+```
+UserOperation → EntryPoint.handleOps() → {
+  ↓
+  1. Validation Phase:
+     - Kiểm tra signature
+     - Validate Smart Account
+     - Validate Paymaster (nếu có)
+  ↓
+  2. Execution Phase:
+     - Gọi Smart Account.execute()
+     - Thực hiện logic nghiệp vụ
+  ↓
+  3. Payment Phase:
+     - Thu gas từ account/paymaster
+     - Hoàn lại gas thừa cho beneficiary
+}
+```
+
+#### **💡 Tại sao cần EntryPoint?**
+1. **Centralized Processing**: Tất cả UserOperations đều đi qua 1 điểm duy nhất
+2. **Security**: Validation tập trung, dễ kiểm soát
+3. **Gas Management**: Quản lý thanh toán gas một cách thống nhất
+4. **Compatibility**: Đảm bảo tương thích với tất cả Smart Accounts
+
+### **🏠 SimpleAccount là gì?**
+
+**SimpleAccount** là một implementation cụ thể của Smart Account trong ERC-4337. Nó là contract đơn giản nhất để demo các tính năng cơ bản của Account Abstraction.
+
+#### **🎯 Vai trò của SimpleAccount:**
+
+**1. Account Management (Quản lý tài khoản)**
+```typescript
+// SimpleAccount quản lý:
+- Owner (người sở hữu tài khoản)
+- Nonce (để tránh replay attacks)
+- Balance (ETH của tài khoản)
+- Deposit (ETH để trả gas)
+```
+
+**2. Transaction Execution (Thực thi giao dịch)**
+```typescript
+// SimpleAccount có thể thực hiện:
+- Single transaction: execute(target, value, data)
+- Batch transactions: executeBatch(calls[])
+- ETH transfers
+- Contract calls
+```
+
+**3. Validation (Xác thực)**
+```typescript
+// SimpleAccount validate:
+- Signature của owner
+- Nonce để tránh replay
+- Quyền hạn thực hiện giao dịch
+```
+
+#### **📋 Các function chính của SimpleAccount:**
+
+**1. execute() - Giao dịch đơn lẻ**
+```typescript
+function execute(
+    address target,    // Contract cần gọi
+    uint256 value,     // ETH gửi kèm
+    bytes calldata data // CallData của function
+) external {
+    // Thực hiện 1 giao dịch
+    (bool success, ) = target.call{value: value}(data);
+    require(success, "Execution failed");
+}
+```
+
+**2. executeBatch() - Giao dịch batch**
+```typescript
+function executeBatch(
+    Call[] calldata calls // Mảng các giao dịch
+) external {
+    // Thực hiện nhiều giao dịch cùng lúc
+    for (uint i = 0; i < calls.length; i++) {
+        (bool success, ) = calls[i].target.call{
+            value: calls[i].value
+        }(calls[i].data);
+        require(success, "Batch execution failed");
+    }
+}
+```
+
+**3. validateUserOp() - Validation**
+```typescript
+function validateUserOp(
+    UserOperation calldata userOp,
+    bytes32 userOpHash,
+    uint256 missingAccountFunds
+) external returns (uint256 validationData) {
+    // Kiểm tra signature của owner
+    // Kiểm tra nonce
+    // Trả về validation result
+}
+```
+
+#### **📊 Flow hoạt động của SimpleAccount:**
+```
+EntryPoint → SimpleAccount.validateUserOp() → {
+  ↓
+  1. Kiểm tra signature của owner
+  2. Kiểm tra nonce
+  3. Trả về validation result
+}
+↓
+EntryPoint → SimpleAccount.execute() → {
+  ↓
+  1. Thực hiện giao dịch đến target contract
+  2. Gửi ETH nếu có (value > 0)
+  3. Gọi function với callData
+}
+```
+
+#### **🔄 Mối quan hệ giữa EntryPoint và SimpleAccount:**
+
+**📊 Flow tổng quan:**
+```
+User → UserOperation → EntryPoint → SimpleAccount → Target Contract
+  ↓         ↓            ↓            ↓              ↓
+Ký giao dịch  Pack data  Validation  Execution    Logic thực tế
+```
+
+**🤝 Phân công trách nhiệm:**
+
+| Component | Trách nhiệm |
+|-----------|-------------|
+| **EntryPoint** | - Validation tổng thể<br>- Quản lý gas payment<br>- Orchestration |
+| **SimpleAccount** | - Validation signature<br>- Thực hiện logic nghiệp vụ<br>- Quản lý nonce |
+
+**💡 Ví dụ thực tế:**
+```typescript
+// 1. User tạo UserOperation
+const userOp = {
+    sender: simpleAccount.address,    // Địa chỉ SimpleAccount
+    callData: accountExec.data,       // Dữ liệu gọi TestCounter.count()
+    verificationGasLimit: 1e6,
+    callGasLimit: 1e6
+}
+
+// 2. EntryPoint xử lý
+await entryPoint.handleOps([userOp], beneficiary, {
+    maxFeePerGas: 1e9,
+    gasLimit: 1e7
+})
+
+// 3. Flow thực tế:
+// EntryPoint → SimpleAccount.validateUserOp() ✅
+// EntryPoint → SimpleAccount.execute() → TestCounter.count() ✅
+// EntryPoint → Thu gas từ SimpleAccount deposit ✅
+```
 
 ### **Paymaster là gì?**
 Paymaster cho phép bên thứ 3 trả gas cho user:
 - **Stake**: Đảm bảo an toàn, bị phạt nếu hoạt động sai
 - **Deposit**: ETH để trả gas cho user
 - **Validation**: Kiểm tra xem có nên trả gas không
+
+#### **🎯 Tóm tắt các khái niệm cốt lõi:**
+
+**EntryPoint:**
+- **Vai trò**: "Cổng vào" duy nhất, xử lý tất cả UserOperations
+- **Chức năng**: Validation, Execution, Payment
+- **Quan trọng**: Là trung tâm của toàn bộ hệ thống Account Abstraction
+
+**SimpleAccount:**
+- **Vai trò**: Smart Account implementation đơn giản
+- **Chức năng**: Quản lý tài khoản, thực thi giao dịch, validation
+- **Quan trọng**: Demo các tính năng cơ bản của Account Abstraction
+
+**Mối quan hệ:**
+- **EntryPoint** là "người điều phối" tổng thể
+- **SimpleAccount** là "người thực hiện" cụ thể
+- Cả hai cùng nhau tạo nên hệ sinh thái Account Abstraction hoàn chỉnh
+
+Đây là kiến trúc cốt lõi của ERC-4337, cho phép tạo ra các Smart Accounts có thể thực hiện logic phức tạp mà không cần user trực tiếp gửi transaction!
 
 
 ## 🆚 So sánh với entrypoint.test.ts

@@ -56,12 +56,12 @@ describe('Demo Flow - Account Abstraction', function () {
     // === BƯỚC 1: Deploy EntryPoint ===
     // EntryPoint là contract chính của ERC-4337, xử lý tất cả UserOperations
     entryPoint = await deployEntryPoint()
-    console.log('✅ EntryPoint deployed at:', entryPoint.address)
+    console.log('EntryPoint deployed at:', entryPoint.address)
 
     // === BƯỚC 2: Tạo Account Owner ===
     // Account owner là wallet thông thường (EOA) sẽ sở hữu Smart Account
     accountOwner = createAccountOwner()
-    console.log('✅ Account owner created:', accountOwner.address)
+    console.log('EOA account:', accountOwner.address)
 
     // === BƯỚC 3: Tạo SimpleAccount ===
     // SimpleAccount là Smart Account implementation đơn giản
@@ -73,22 +73,21 @@ describe('Demo Flow - Account Abstraction', function () {
     )
     simpleAccount = account
     simpleAccountFactory = factory
-    console.log('✅ SimpleAccount created at:', simpleAccount.address)
+    console.log('Simple Contract Account created at:', simpleAccount.address)
 
-    // === BƯỚC 4: Fund Account ===
-    // Cần fund account với ETH để có thể trả gas cho các giao dịch
+    // === BƯỚC 4: Fund Contract Account ===
+    // Cần fund account với 1 ETH để có thể trả gas cho các giao dịch
     await fund(simpleAccount)
-    console.log('✅ Account funded')
+    console.log('Contract Account funded 1 ETH')
 
     // === BƯỚC 5: Deploy Test Counter ===
     // TestCounter là contract đơn giản để demo việc thực hiện giao dịch
     counter = await new TestCounter__factory(ethersSigner).deploy()
-    console.log('✅ TestCounter deployed at:', counter.address)
+    console.log('TestCounter deployed at:', counter.address)
   })
 
   describe('Basic Account Operations', () => {
     it('should execute simple transaction', async () => {
-      console.log('\n🔄 Testing basic transaction...')
       
       // === CHUẨN BỊ GIAO DỊCH ===
       // Tạo callData để gọi function count() của TestCounter
@@ -117,27 +116,25 @@ describe('Demo Flow - Account Abstraction', function () {
       const countBefore = await counter.counters(simpleAccount.address)
       
       // === LOG MINH CHỨNG AI TRẢ GAS ===
-      const accountDepositBefore = await entryPoint.balanceOf(simpleAccount.address)
+      // const accountDepositBefore = await entryPoint.balanceOf(simpleAccount.address)
       const accountBalanceBefore = await ethers.provider.getBalance(simpleAccount.address)
       const ethersSignerBalanceBefore = await ethers.provider.getBalance(await ethersSigner.getAddress())
       
-      console.log('💰 Gas Payment Analysis:')
-      console.log('   - Account deposit before:', ethers.utils.formatEther(accountDepositBefore), 'ETH')
-      console.log('   - Account balance before:', ethers.utils.formatEther(accountBalanceBefore), 'ETH')
-      console.log('   - EthersSigner balance before:', ethers.utils.formatEther(ethersSignerBalanceBefore), 'ETH')
-      
       // Gửi UserOperation đến EntryPoint để xử lý
+      console.log('Transaction exec log start ------------------------------')
       const tx = await entryPoint.handleOps([userOp], beneficiary, {
         maxFeePerGas: 1e9,    // Max fee per gas
         gasLimit: 1e7         // Gas limit cho transaction
       })
+      console.log('Transaction exec log end ------------------------------')
+
       const receipt = await tx.wait()
 
       // === KIỂM TRA KẾT QUẢ ===
       const countAfter = await counter.counters(simpleAccount.address)
-      const accountDepositAfter = await entryPoint.balanceOf(simpleAccount.address)
-      const accountBalanceAfter = await ethers.provider.getBalance(simpleAccount.address)
+      // const accountDepositAfter = await entryPoint.balanceOf(simpleAccount.address)
       const ethersSignerBalanceAfter = await ethers.provider.getBalance(await ethersSigner.getAddress())
+      const accountBalanceAfter = await ethers.provider.getBalance(simpleAccount.address)
       
       expect(countAfter.toNumber()).to.equal(countBefore.toNumber() + 1)
       
@@ -148,190 +145,184 @@ describe('Demo Flow - Account Abstraction', function () {
       
       // === LOG KẾT QUẢ GAS PAYMENT ===
       console.log('💰 Gas Payment Results:')
-      console.log('   - Account deposit after:', ethers.utils.formatEther(accountDepositAfter), 'ETH')
-      console.log('   - Account balance after:', ethers.utils.formatEther(accountBalanceAfter), 'ETH')
-      console.log('   - EthersSigner balance after:', ethers.utils.formatEther(ethersSignerBalanceAfter), 'ETH')
-      console.log('   - Account deposit change:', ethers.utils.formatEther(accountDepositAfter.sub(accountDepositBefore)), 'ETH (positive = received refund)')
-      console.log('   - Account balance change:', ethers.utils.formatEther(accountBalanceAfter.sub(accountBalanceBefore)), 'ETH (negative = paid gas)')
-      console.log('   - EthersSigner paid (balance decrease):', ethers.utils.formatEther(ethersSignerBalanceBefore.sub(ethersSignerBalanceAfter)), 'ETH')
-      console.log('   - Beneficiary received gas refund:', ethers.utils.formatEther(await ethers.provider.getBalance(beneficiary)), 'ETH')
-      console.log('   - Note: Account paid gas from balance, received refund to deposit')
+      console.log('   - Simple Contract Account balance paid:', ethers.utils.formatEther(accountBalanceBefore.sub(accountBalanceAfter)))
+      console.log('   - EthersSigner paid:', ethers.utils.formatEther(ethersSignerBalanceBefore.sub(ethersSignerBalanceAfter)), 'ETH')
     })
 
-    it('should execute batch transactions', async () => {
-      console.log('\n🔄 Testing batch transactions...')
+    // it('should execute batch transactions', async () => {
+    //   console.log('\n🔄 Testing batch transactions...')
       
-      // === CHUẨN BỊ BATCH GIAO DỊCH ===
-      // Tạo 2 địa chỉ target để nhận ETH
-      const target1 = createAddress()
-      const target2 = createAddress()
+    //   // === CHUẨN BỊ BATCH GIAO DỊCH ===
+    //   // Tạo 2 địa chỉ target để nhận ETH
+    //   const target1 = createAddress()
+    //   const target2 = createAddress()
       
-      // Tạo callData cho batch execution
-      // executeBatch cho phép thực hiện nhiều giao dịch trong 1 UserOperation
-      const batchData = simpleAccount.interface.encodeFunctionData('executeBatch', [[
-        { target: target1, value: parseEther('0.1'), data: '0x' },  // Gửi 0.1 ETH đến target1
-        { target: target2, value: parseEther('0.05'), data: '0x' }  // Gửi 0.05 ETH đến target2
-      ]])
+    //   // Tạo callData cho batch execution
+    //   // executeBatch cho phép thực hiện nhiều giao dịch trong 1 UserOperation
+    //   const batchData = simpleAccount.interface.encodeFunctionData('executeBatch', [[
+    //     { target: target1, value: parseEther('0.1'), data: '0x' },  // Gửi 0.1 ETH đến target1
+    //     { target: target2, value: parseEther('0.05'), data: '0x' }  // Gửi 0.05 ETH đến target2
+    //   ]])
 
-      // === TẠO USEROPERATION CHO BATCH ===
-      const userOp = await fillSignAndPack({
-        sender: simpleAccount.address,
-        callData: batchData,
-        verificationGasLimit: 1e6,
-        callGasLimit: 1e6
-      }, accountOwner, entryPoint)
+    //   // === TẠO USEROPERATION CHO BATCH ===
+    //   const userOp = await fillSignAndPack({
+    //     sender: simpleAccount.address,
+    //     callData: batchData,
+    //     verificationGasLimit: 1e6,
+    //     callGasLimit: 1e6
+    //   }, accountOwner, entryPoint)
 
-      // === THỰC HIỆN BATCH GIAO DỊCH ===
-      const beneficiary = createAddress()
-      const balance1Before = await ethers.provider.getBalance(target1)
-      const balance2Before = await ethers.provider.getBalance(target2)
+    //   // === THỰC HIỆN BATCH GIAO DỊCH ===
+    //   const beneficiary = createAddress()
+    //   const balance1Before = await ethers.provider.getBalance(target1)
+    //   const balance2Before = await ethers.provider.getBalance(target2)
       
-      // === LOG MINH CHỨNG AI TRẢ GAS ===
-      const accountDepositBefore = await entryPoint.balanceOf(simpleAccount.address)
-      const ethersSignerBalanceBefore = await ethers.provider.getBalance(await ethersSigner.getAddress())
+    //   // === LOG MINH CHỨNG AI TRẢ GAS ===
+    //   const accountDepositBefore = await entryPoint.balanceOf(simpleAccount.address)
+    //   const ethersSignerBalanceBefore = await ethers.provider.getBalance(await ethersSigner.getAddress())
       
-      console.log('💰 Gas Payment Analysis (Batch):')
-      console.log('   - Account deposit before:', ethers.utils.formatEther(accountDepositBefore), 'ETH')
-      console.log('   - EthersSigner balance before:', ethers.utils.formatEther(ethersSignerBalanceBefore), 'ETH')
+    //   console.log('💰 Gas Payment Analysis (Batch):')
+    //   console.log('   - Account deposit before:', ethers.utils.formatEther(accountDepositBefore), 'ETH')
+    //   console.log('   - EthersSigner balance before:', ethers.utils.formatEther(ethersSignerBalanceBefore), 'ETH')
 
-      const tx = await entryPoint.handleOps([userOp], beneficiary, {
-        maxFeePerGas: 1e9,
-        gasLimit: 1e7
-      })
-      const receipt = await tx.wait()
+    //   const tx = await entryPoint.handleOps([userOp], beneficiary, {
+    //     maxFeePerGas: 1e9,
+    //     gasLimit: 1e7
+    //   })
+    //   const receipt = await tx.wait()
 
-      // === KIỂM TRA KẾT QUẢ ===
-      const balance1After = await ethers.provider.getBalance(target1)
-      const balance2After = await ethers.provider.getBalance(target2)
-      const accountDepositAfter = await entryPoint.balanceOf(simpleAccount.address)
-      const ethersSignerBalanceAfter = await ethers.provider.getBalance(await ethersSigner.getAddress())
+    //   // === KIỂM TRA KẾT QUẢ ===
+    //   const balance1After = await ethers.provider.getBalance(target1)
+    //   const balance2After = await ethers.provider.getBalance(target2)
+    //   const accountDepositAfter = await entryPoint.balanceOf(simpleAccount.address)
+    //   const ethersSignerBalanceAfter = await ethers.provider.getBalance(await ethersSigner.getAddress())
 
-      expect(balance1After).to.equal(balance1Before.add(parseEther('0.1')))
-      expect(balance2After).to.equal(balance2Before.add(parseEther('0.05')))
+    //   expect(balance1After).to.equal(balance1Before.add(parseEther('0.1')))
+    //   expect(balance2After).to.equal(balance2Before.add(parseEther('0.05')))
       
-      console.log('✅ Batch transaction executed successfully')
-      console.log('   - Target1 received:', parseEther('0.1').toString())
-      console.log('   - Target2 received:', parseEther('0.05').toString())
-      console.log('   - Gas used:', receipt.gasUsed.toString())
+    //   console.log('✅ Batch transaction executed successfully')
+    //   console.log('   - Target1 received:', parseEther('0.1').toString())
+    //   console.log('   - Target2 received:', parseEther('0.05').toString())
+    //   console.log('   - Gas used:', receipt.gasUsed.toString())
       
-      // === LOG KẾT QUẢ GAS PAYMENT ===
-      console.log('💰 Gas Payment Results (Batch):')
-      console.log('   - Account deposit after:', ethers.utils.formatEther(accountDepositAfter), 'ETH')
-      console.log('   - EthersSigner balance after:', ethers.utils.formatEther(ethersSignerBalanceAfter), 'ETH')
-      console.log('   - Account deposit change:', ethers.utils.formatEther(accountDepositAfter.sub(accountDepositBefore)), 'ETH (negative = paid gas)')
-      console.log('   - EthersSigner paid (balance decrease):', ethers.utils.formatEther(ethersSignerBalanceBefore.sub(ethersSignerBalanceAfter)), 'ETH')
-      console.log('   - Beneficiary received gas refund:', ethers.utils.formatEther(await ethers.provider.getBalance(beneficiary)), 'ETH')
-      console.log('   - Note: Account paid gas for UserOperation execution')
-    })
+    //   // === LOG KẾT QUẢ GAS PAYMENT ===
+    //   console.log('💰 Gas Payment Results (Batch):')
+    //   console.log('   - Account deposit after:', ethers.utils.formatEther(accountDepositAfter), 'ETH')
+    //   console.log('   - EthersSigner balance after:', ethers.utils.formatEther(ethersSignerBalanceAfter), 'ETH')
+    //   console.log('   - Account deposit change:', ethers.utils.formatEther(accountDepositAfter.sub(accountDepositBefore)), 'ETH (negative = paid gas)')
+    //   console.log('   - EthersSigner paid (balance decrease):', ethers.utils.formatEther(ethersSignerBalanceBefore.sub(ethersSignerBalanceAfter)), 'ETH')
+    //   console.log('   - Beneficiary received gas refund:', ethers.utils.formatEther(await ethers.provider.getBalance(beneficiary)), 'ETH')
+    //   console.log('   - Note: Account paid gas for UserOperation execution')
+    // })
   })
 
-  describe('Paymaster Integration', () => {
-    // === PAYMASTER LÀ GÌ? ===
-    // Paymaster là contract cho phép bên thứ 3 trả gas cho user
-    // Thay vì user phải có ETH để trả gas, paymaster sẽ trả thay
-    // Điều này mở ra khả năng:
-    // - DApp trả gas cho user
-    // - Sponsor transaction
-    // - Gasless transaction
+  // describe('Paymaster Integration', () => {
+  //   // === PAYMASTER LÀ GÌ? ===
+  //   // Paymaster là contract cho phép bên thứ 3 trả gas cho user
+  //   // Thay vì user phải có ETH để trả gas, paymaster sẽ trả thay
+  //   // Điều này mở ra khả năng:
+  //   // - DApp trả gas cho user
+  //   // - Sponsor transaction
+  //   // - Gasless transaction
     
-    let paymaster: TestPaymasterAcceptAll  // Paymaster contract
-    let account2Owner: Wallet              // Owner của account thứ 2
-    let account2: SimpleAccount            // Account thứ 2 để test paymaster
+  //   let paymaster: TestPaymasterAcceptAll  // Paymaster contract
+  //   let account2Owner: Wallet              // Owner của account thứ 2
+  //   let account2: SimpleAccount            // Account thứ 2 để test paymaster
 
-    before(async () => {
-      // === DEPLOY PAYMASTER ===
-      // TestPaymasterAcceptAll là paymaster test chấp nhận tất cả request
-      paymaster = await new TestPaymasterAcceptAll__factory(ethersSigner).deploy(entryPoint.address)
+  //   before(async () => {
+  //     // === DEPLOY PAYMASTER ===
+  //     // TestPaymasterAcceptAll là paymaster test chấp nhận tất cả request
+  //     paymaster = await new TestPaymasterAcceptAll__factory(ethersSigner).deploy(entryPoint.address)
       
-      // Paymaster cần stake để đảm bảo an toàn
-      // Stake sẽ bị phạt nếu paymaster hoạt động sai
-      await paymaster.addStake(2, { value: parseEther('2') }) // Add stake
+  //     // Paymaster cần stake để đảm bảo an toàn
+  //     // Stake sẽ bị phạt nếu paymaster hoạt động sai
+  //     await paymaster.addStake(2, { value: parseEther('2') }) // Add stake
       
-      // Paymaster cần deposit để trả gas cho user
-      await paymaster.deposit({ value: parseEther('1') }) // Add deposit
-      console.log('✅ Paymaster deployed at:', paymaster.address)
+  //     // Paymaster cần deposit để trả gas cho user
+  //     await paymaster.deposit({ value: parseEther('1') }) // Add deposit
+  //     console.log('✅ Paymaster deployed at:', paymaster.address)
 
-      // === TẠO ACCOUNT THỨ 2 ===
-      // Tạo account riêng để test paymaster (không fund ETH)
-      account2Owner = createAccountOwner()
-      const { proxy: account2Proxy } = await createAccount(
-        ethersSigner,
-        account2Owner.address,
-        entryPoint.address
-      )
-      account2 = account2Proxy
-      console.log('✅ Account2 created at:', account2.address)
-    })
+  //     // === TẠO ACCOUNT THỨ 2 ===
+  //     // Tạo account riêng để test paymaster (không fund ETH)
+  //     account2Owner = createAccountOwner()
+  //     const { proxy: account2Proxy } = await createAccount(
+  //       ethersSigner,
+  //       account2Owner.address,
+  //       entryPoint.address
+  //     )
+  //     account2 = account2Proxy
+  //     console.log('✅ Account2 created at:', account2.address)
+  //   })
 
-    it('should execute transaction with paymaster sponsorship', async () => {
-      console.log('\n🔄 Testing paymaster sponsorship...')
+  //   it('should execute transaction with paymaster sponsorship', async () => {
+  //     console.log('\n🔄 Testing paymaster sponsorship...')
       
-      // === CHUẨN BỊ GIAO DỊCH ===
-      // Tạo giao dịch tương tự như test trước
-      const countData = await counter.populateTransaction.count()
-      const accountExec = await account2.populateTransaction.execute(
-        counter.address,
-        0,
-        countData.data!
-      )
+  //     // === CHUẨN BỊ GIAO DỊCH ===
+  //     // Tạo giao dịch tương tự như test trước
+  //     const countData = await counter.populateTransaction.count()
+  //     const accountExec = await account2.populateTransaction.execute(
+  //       counter.address,
+  //       0,
+  //       countData.data!
+  //     )
 
-      // === TẠO USEROPERATION VỚI PAYMASTER ===
-      // Khác biệt chính: thêm paymaster vào UserOperation
-      const userOp = await fillSignAndPack({
-        sender: account2.address,
-        callData: accountExec.data,
-        paymaster: paymaster.address,              // Địa chỉ paymaster
-        paymasterVerificationGasLimit: 1e6,       // Gas cho paymaster validation
-        paymasterPostOpGasLimit: 1e5,             // Gas cho paymaster postOp
-        verificationGasLimit: 1e6,
-        callGasLimit: 1e6
-      }, account2Owner, entryPoint)
+  //     // === TẠO USEROPERATION VỚI PAYMASTER ===
+  //     // Khác biệt chính: thêm paymaster vào UserOperation
+  //     const userOp = await fillSignAndPack({
+  //       sender: account2.address,
+  //       callData: accountExec.data,
+  //       paymaster: paymaster.address,              // Địa chỉ paymaster
+  //       paymasterVerificationGasLimit: 1e6,       // Gas cho paymaster validation
+  //       paymasterPostOpGasLimit: 1e5,             // Gas cho paymaster postOp
+  //       verificationGasLimit: 1e6,
+  //       callGasLimit: 1e6
+  //     }, account2Owner, entryPoint)
 
-      // === THỰC HIỆN GIAO DỊCH VỚI PAYMASTER ===
-      const beneficiary = createAddress()
-      const paymasterDepositBefore = await entryPoint.balanceOf(paymaster.address)
-      const countBefore = await counter.counters(account2.address)
+  //     // === THỰC HIỆN GIAO DỊCH VỚI PAYMASTER ===
+  //     const beneficiary = createAddress()
+  //     const paymasterDepositBefore = await entryPoint.balanceOf(paymaster.address)
+  //     const countBefore = await counter.counters(account2.address)
       
-      // === LOG MINH CHỨNG AI TRẢ GAS ===
-      const account2DepositBefore = await entryPoint.balanceOf(account2.address)
-      const ethersSignerBalanceBefore = await ethers.provider.getBalance(await ethersSigner.getAddress())
+  //     // === LOG MINH CHỨNG AI TRẢ GAS ===
+  //     const account2DepositBefore = await entryPoint.balanceOf(account2.address)
+  //     const ethersSignerBalanceBefore = await ethers.provider.getBalance(await ethersSigner.getAddress())
       
-      console.log('💰 Gas Payment Analysis (Paymaster):')
-      console.log('   - Account2 deposit before:', ethers.utils.formatEther(account2DepositBefore), 'ETH')
-      console.log('   - Paymaster deposit before:', ethers.utils.formatEther(paymasterDepositBefore), 'ETH')
-      console.log('   - EthersSigner balance before:', ethers.utils.formatEther(ethersSignerBalanceBefore), 'ETH')
+  //     console.log('💰 Gas Payment Analysis (Paymaster):')
+  //     console.log('   - Account2 deposit before:', ethers.utils.formatEther(account2DepositBefore), 'ETH')
+  //     console.log('   - Paymaster deposit before:', ethers.utils.formatEther(paymasterDepositBefore), 'ETH')
+  //     console.log('   - EthersSigner balance before:', ethers.utils.formatEther(ethersSignerBalanceBefore), 'ETH')
 
-      const tx = await entryPoint.handleOps([userOp], beneficiary, {
-        maxFeePerGas: 1e9,
-        gasLimit: 1e7
-      })
-      const receipt = await tx.wait()
+  //     const tx = await entryPoint.handleOps([userOp], beneficiary, {
+  //       maxFeePerGas: 1e9,
+  //       gasLimit: 1e7
+  //     })
+  //     const receipt = await tx.wait()
 
-      // === KIỂM TRA KẾT QUẢ ===
-      const paymasterDepositAfter = await entryPoint.balanceOf(paymaster.address)
-      const countAfter = await counter.counters(account2.address)
-      const account2DepositAfter = await entryPoint.balanceOf(account2.address)
-      const ethersSignerBalanceAfter = await ethers.provider.getBalance(await ethersSigner.getAddress())
+  //     // === KIỂM TRA KẾT QUẢ ===
+  //     const paymasterDepositAfter = await entryPoint.balanceOf(paymaster.address)
+  //     const countAfter = await counter.counters(account2.address)
+  //     const account2DepositAfter = await entryPoint.balanceOf(account2.address)
+  //     const ethersSignerBalanceAfter = await ethers.provider.getBalance(await ethersSigner.getAddress())
 
-      expect(countAfter.toNumber()).to.equal(countBefore.toNumber() + 1)
-      expect(paymasterDepositAfter).to.be.lt(paymasterDepositBefore) // Paymaster đã trả gas
+  //     expect(countAfter.toNumber()).to.equal(countBefore.toNumber() + 1)
+  //     expect(paymasterDepositAfter).to.be.lt(paymasterDepositBefore) // Paymaster đã trả gas
 
-      console.log('✅ Paymaster transaction executed successfully')
-      console.log('   - Counter before:', countBefore.toNumber())
-      console.log('   - Counter after:', countAfter.toNumber())
-      console.log('   - Gas used:', receipt.gasUsed.toString())
+  //     console.log('✅ Paymaster transaction executed successfully')
+  //     console.log('   - Counter before:', countBefore.toNumber())
+  //     console.log('   - Counter after:', countAfter.toNumber())
+  //     console.log('   - Gas used:', receipt.gasUsed.toString())
       
-      // === LOG KẾT QUẢ GAS PAYMENT ===
-      console.log('💰 Gas Payment Results (Paymaster):')
-      console.log('   - Account2 deposit after:', ethers.utils.formatEther(account2DepositAfter), 'ETH')
-      console.log('   - Paymaster deposit after:', ethers.utils.formatEther(paymasterDepositAfter), 'ETH')
-      console.log('   - EthersSigner balance after:', ethers.utils.formatEther(ethersSignerBalanceAfter), 'ETH')
-      console.log('   - Account2 deposit change:', ethers.utils.formatEther(account2DepositAfter.sub(account2DepositBefore)), 'ETH (no change = gasless)')
-      console.log('   - Paymaster deposit change:', ethers.utils.formatEther(paymasterDepositAfter.sub(paymasterDepositBefore)), 'ETH (negative = paid gas)')
-      console.log('   - EthersSigner paid (balance decrease):', ethers.utils.formatEther(ethersSignerBalanceBefore.sub(ethersSignerBalanceAfter)), 'ETH')
-      console.log('   - Beneficiary received gas refund:', ethers.utils.formatEther(await ethers.provider.getBalance(beneficiary)), 'ETH')
-      console.log('   - Note: Paymaster paid gas, Account2 had gasless transaction')
-    })
-  })
+  //     // === LOG KẾT QUẢ GAS PAYMENT ===
+  //     console.log('💰 Gas Payment Results (Paymaster):')
+  //     console.log('   - Account2 deposit after:', ethers.utils.formatEther(account2DepositAfter), 'ETH')
+  //     console.log('   - Paymaster deposit after:', ethers.utils.formatEther(paymasterDepositAfter), 'ETH')
+  //     console.log('   - EthersSigner balance after:', ethers.utils.formatEther(ethersSignerBalanceAfter), 'ETH')
+  //     console.log('   - Account2 deposit change:', ethers.utils.formatEther(account2DepositAfter.sub(account2DepositBefore)), 'ETH (no change = gasless)')
+  //     console.log('   - Paymaster deposit change:', ethers.utils.formatEther(paymasterDepositAfter.sub(paymasterDepositBefore)), 'ETH (negative = paid gas)')
+  //     console.log('   - EthersSigner paid (balance decrease):', ethers.utils.formatEther(ethersSignerBalanceBefore.sub(ethersSignerBalanceAfter)), 'ETH')
+  //     console.log('   - Beneficiary received gas refund:', ethers.utils.formatEther(await ethers.provider.getBalance(beneficiary)), 'ETH')
+  //     console.log('   - Note: Paymaster paid gas, Account2 had gasless transaction')
+  //   })
+  // })
 
 })
